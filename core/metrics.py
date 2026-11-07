@@ -1,6 +1,6 @@
 import pandas as pd
 
-from core.config import LIMITE_ATENCAO, LIMITE_CRITICO
+from core.config import LIMITE_ATENCAO, LIMITE_CRITICO, SITUACAO_CANCELADA
 
 
 def calcular_taxa_de_rejeicao(total_produzido: float, total_rejeitado: float) -> float:
@@ -204,3 +204,9 @@ def pegar_extremo(tabela: pd.DataFrame, coluna_nome: str, coluna_valor: str, mai
         return None
     linha = tabela.loc[tabela[coluna_valor].idxmax() if maior else tabela[coluna_valor].idxmin()]
     return linha[coluna_nome], linha[coluna_valor]
+
+
+def excluir_cancelados(vendas: pd.DataFrame) -> pd.DataFrame:
+    if vendas.empty:
+        return vendas
+    return vendas[vendas["situacao_pedido"] != SITUACAO_CANCELADA]

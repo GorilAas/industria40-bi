@@ -5,6 +5,8 @@ import pandas as pd
 
 from core.database import consultar
 
+CORRECOES_DE_TEXTO = {"Manha": "Manhã", "Centro-oeste": "Centro-Oeste"}
+
 LIMITE_LINHAS = 100_000
 INTERVALOS_VALIDOS = ["minute", "hour", "day"]
 
@@ -13,6 +15,18 @@ INTERVALOS_VALIDOS = ["minute", "hour", "day"]
 class Periodo:
     inicio: datetime | None = None
     fim: datetime | None = None
+
+
+def formatar_texto(coluna: pd.Series) -> pd.Series:
+    texto = coluna.str.replace("_", " ").str.capitalize()
+    return texto.replace(CORRECOES_DE_TEXTO)
+
+
+def ajustar_textos(tabela: pd.DataFrame, colunas: list[str]) -> pd.DataFrame:
+    for coluna in colunas:
+        if coluna in tabela.columns:
+            tabela[coluna] = formatar_texto(tabela[coluna])
+    return tabela
 
 
 def montar_filtro_periodo(coluna: str, periodo: Periodo, parametros: dict) -> str:
@@ -27,7 +41,7 @@ def montar_filtro_periodo(coluna: str, periodo: Periodo, parametros: dict) -> st
 
 
 def carregar_maquinas() -> pd.DataFrame:
-    return consultar("""
+    tabela = consultar("""
         SELECT machine_id AS id_maquina, machine_code AS codigo_maquina,
                machine_name AS nome_maquina, production_line AS linha_producao,
                machine_type AS tipo_maquina,
@@ -36,6 +50,7 @@ def carregar_maquinas() -> pd.DataFrame:
         FROM machines
         ORDER BY machine_name
     """)
+    return ajustar_textos(tabela, ["status_maquina"])
 
 
 def listar_produtos() -> list[str]:
@@ -49,13 +64,13 @@ def listar_turnos() -> list[str]:
     tabela = consultar("SELECT DISTINCT shift_name AS turno FROM production_events")
     if tabela.empty:
         return []
-    return sorted(tabela["turno"].dropna().tolist())
+    return sorted(formatar_texto(tabela["turno"]).dropna().tolist())
 
 
 def carregar_producao(periodo: Periodo) -> pd.DataFrame:
     parametros = {"limite": LIMITE_LINHAS}
     filtro_periodo = montar_filtro_periodo("p.started_at", periodo, parametros)
-    return consultar(
+    tabela = consultar(
         f"""
         SELECT p.production_id AS id_producao, p.batch_id AS id_lote,
                p.machine_id AS id_maquina, m.machine_name AS nome_maquina,
@@ -77,12 +92,13 @@ def carregar_producao(periodo: Periodo) -> pd.DataFrame:
     """,
         parametros,
     )
+    return ajustar_textos(tabela, ["turno"])
 
 
 def carregar_vendas(periodo: Periodo) -> pd.DataFrame:
     parametros = {"limite": LIMITE_LINHAS}
     filtro_periodo = montar_filtro_periodo("created_at", periodo, parametros)
-    return consultar(
+    tabela = consultar(
         f"""
         SELECT order_id AS id_pedido, order_number AS numero_pedido, batch_id AS id_lote,
                product_code AS codigo_produto, product_name AS nome_produto,
@@ -97,10 +113,11 @@ def carregar_vendas(periodo: Periodo) -> pd.DataFrame:
     """,
         parametros,
     )
+    return ajustar_textos(tabela, ["situacao_pedido", "canal_venda", "regiao_cliente"])
 
 
 def carregar_telemetria_atual() -> pd.DataFrame:
-    return consultar("""
+    tabela = consultar("""
         SELECT DISTINCT ON (t.machine_id)
                t.machine_id AS id_maquina, m.machine_name AS nome_maquina,
                t.temperature_c AS temperatura_c, t.vibration_mm_s AS vibracao_mm_s,
@@ -110,6 +127,7 @@ def carregar_telemetria_atual() -> pd.DataFrame:
         LEFT JOIN machines m ON m.machine_id = t.machine_id
         ORDER BY t.machine_id, t.recorded_at DESC
     """)
+    return ajustar_textos(tabela, ["status_maquina"])
 
 
 def carregar_telemetria_agrupada(periodo: Periodo, intervalo: str = "hour") -> pd.DataFrame:

@@ -9,6 +9,33 @@ CORES_STATUS = {
     "Sem dados": "#8D8D8D",
 }
 
+ROTULOS = {
+    "nome_maquina": "Máquina",
+    "linha_producao": "Linha",
+    "nome_produto": "Produto",
+    "turno": "Turno",
+    "hora": "Hora",
+    "regiao_cliente": "Região",
+    "canal_venda": "Canal",
+    "situacao_pedido": "Situação",
+    "momento": "",
+    "produzido": "Produzido",
+    "rejeitado": "Rejeitado",
+    "taxa_rejeicao": "Rejeição (%)",
+    "unidades_por_hora": "Unidades por hora",
+    "ciclo_medio_segundos": "Ciclo médio (s)",
+    "parada_minutos": "Parada (min)",
+    "faturamento": "Faturamento (R$)",
+    "quantidade": "Unidades",
+    "pedidos": "Pedidos",
+    "aprovado": "Aprovado",
+    "vendido": "Vendido",
+    "status": "Status",
+    "componentes": "Componentes",
+    "variable": "",
+    "value": "Unidades",
+}
+
 
 def padronizar(figura: Figure) -> Figure:
     figura.update_layout(
@@ -20,22 +47,30 @@ def padronizar(figura: Figure) -> Figure:
 
 
 def grafico_barras(tabela: pd.DataFrame, x: str, y: str, titulo: str, **opcoes) -> Figure:
-    return padronizar(px.bar(tabela, x=x, y=y, title=titulo, **opcoes))
+    return padronizar(px.bar(tabela, x=x, y=y, title=titulo, labels=ROTULOS, **opcoes))
 
 
 def grafico_linhas(tabela: pd.DataFrame, x: str, y: str, titulo: str, **opcoes) -> Figure:
-    return padronizar(px.line(tabela, x=x, y=y, title=titulo, **opcoes))
+    return padronizar(px.line(tabela, x=x, y=y, title=titulo, labels=ROTULOS, **opcoes))
 
 
 def grafico_barras_agrupadas(tabela: pd.DataFrame, x: str, y: list[str], titulo: str) -> Figure:
-    return padronizar(px.bar(tabela, x=x, y=y, barmode="group", title=titulo))
+    return padronizar(px.bar(tabela, x=x, y=y, barmode="group", title=titulo, labels=ROTULOS))
 
 
 def grafico_linhas_varias(tabela: pd.DataFrame, x: str, y: list[str], titulo: str) -> Figure:
-    return padronizar(px.line(tabela, x=x, y=y, title=titulo))
+    return padronizar(px.line(tabela, x=x, y=y, title=titulo, labels=ROTULOS))
 
 
 def grafico_barras_por_status(tabela: pd.DataFrame, x: str, y: str, titulo: str) -> Figure:
     return padronizar(
-        px.bar(tabela, x=x, y=y, color="status", color_discrete_map=CORES_STATUS, title=titulo)
+        px.bar(
+            tabela,
+            x=x,
+            y=y,
+            color="status",
+            color_discrete_map=CORES_STATUS,
+            title=titulo,
+            labels=ROTULOS,
+        )
     )

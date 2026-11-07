@@ -3,7 +3,12 @@ import streamlit as st
 from core.charts import grafico_barras, grafico_barras_por_status
 from core.data import carregar_componentes, carregar_maquinas, carregar_producao, carregar_vendas
 from core.filters import aplicar_filtros, criar_filtros_na_barra_lateral
-from core.metrics import agrupar_producao, classificar_componentes, resumir_producao
+from core.metrics import (
+    agrupar_producao,
+    classificar_componentes,
+    excluir_cancelados,
+    resumir_producao,
+)
 from core.ui import (
     configurar_pagina,
     formatar_moeda,
@@ -17,7 +22,7 @@ configurar_pagina("Visão geral")
 filtros = criar_filtros_na_barra_lateral()
 
 producao = aplicar_filtros(carregar_producao(filtros.periodo), filtros)
-vendas = aplicar_filtros(carregar_vendas(filtros.periodo), filtros)
+vendas = excluir_cancelados(aplicar_filtros(carregar_vendas(filtros.periodo), filtros))
 maquinas = carregar_maquinas()
 componentes = aplicar_filtros(classificar_componentes(carregar_componentes()), filtros)
 
@@ -32,12 +37,12 @@ mostrar_indicadores(
         ("Produzido", formatar_numero(resumo["produzido"])),
         ("Rejeitados", formatar_numero(resumo["rejeitado"])),
         ("Taxa de rejeição", f"{formatar_numero(resumo['taxa_rejeicao'], 2)}%"),
-        ("Pedidos", formatar_numero(len(vendas))),
+        ("Pedidos", formatar_numero(len(vendas)), "Não inclui pedidos cancelados."),
     ]
 )
 mostrar_indicadores(
     [
-        ("Faturamento", formatar_moeda(faturamento)),
+        ("Faturamento", formatar_moeda(faturamento), "Não inclui pedidos cancelados."),
         ("Máquinas monitoradas", formatar_numero(len(maquinas))),
         (
             "Máquinas em atenção ou crítico",

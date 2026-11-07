@@ -14,6 +14,8 @@ LIMITE_CRITICO = 90.0
 
 LIMITE_DIFERENCA_PCT = 10.0
 
+SITUACAO_CANCELADA = "Cancelado"
+
 
 def pegar_url_do_banco() -> str:
     url = None

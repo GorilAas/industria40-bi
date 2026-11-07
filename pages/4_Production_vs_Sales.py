@@ -7,6 +7,7 @@ from core.filters import aplicar_filtros, criar_filtros_na_barra_lateral
 from core.metrics import (
     comparar_producao_vendas,
     comparar_producao_vendas_no_tempo,
+    excluir_cancelados,
     pegar_extremo,
 )
 from core.ui import (
@@ -23,7 +24,7 @@ configurar_pagina("Produção versus vendas")
 filtros = criar_filtros_na_barra_lateral()
 st.sidebar.caption("Máquina e turno filtram só a produção. Vendas usam período e produto.")
 producao = aplicar_filtros(carregar_producao(filtros.periodo), filtros)
-vendas = aplicar_filtros(carregar_vendas(filtros.periodo), filtros)
+vendas = excluir_cancelados(aplicar_filtros(carregar_vendas(filtros.periodo), filtros))
 
 if producao.empty and vendas.empty:
     mostrar_sem_dados()
@@ -32,7 +33,7 @@ if producao.empty and vendas.empty:
 st.info(
     "A diferença entre produzido e vendido não é o estoque físico. "
     "O banco não registra movimentação de estoque, então a conta ignora devoluções, "
-    "perdas e produção anterior ao período."
+    "perdas e produção anterior ao período. Pedidos cancelados não entram em vendido."
 )
 
 por_produto = comparar_producao_vendas(producao, vendas)

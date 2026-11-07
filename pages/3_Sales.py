@@ -7,6 +7,7 @@ from core.metrics import (
     agrupar_vendas,
     agrupar_vendas_no_tempo,
     calcular_ticket_medio,
+    excluir_cancelados,
     pegar_extremo,
 )
 from core.ui import (
@@ -29,21 +30,25 @@ if vendas.empty:
     mostrar_sem_dados()
     st.stop()
 
-faturamento = float(vendas["valor_total"].sum())
-pedidos = len(vendas)
+validas = excluir_cancelados(vendas)
+faturamento = float(validas["valor_total"].sum())
+pedidos = len(validas)
 mostrar_indicadores(
     [
         ("Faturamento", formatar_moeda(faturamento)),
         ("Pedidos", formatar_numero(pedidos)),
         ("Ticket médio", formatar_moeda(calcular_ticket_medio(faturamento, pedidos))),
-        ("Quantidade vendida", formatar_numero(vendas["qtd_vendida"].sum())),
+        ("Quantidade vendida", formatar_numero(validas["qtd_vendida"].sum())),
     ]
 )
-st.caption("Faturamento e pedidos incluem todas as situações de pedido.")
+st.caption(
+    f"{formatar_numero(len(vendas) - pedidos)} pedidos cancelados ficam fora do faturamento, "
+    "do ticket médio e das quantidades. O gráfico de situação mostra todos."
+)
 
-por_produto = agrupar_vendas(vendas, "nome_produto")
-por_regiao = agrupar_vendas(vendas, "regiao_cliente")
-por_canal = agrupar_vendas(vendas, "canal_venda")
+por_produto = agrupar_vendas(validas, "nome_produto")
+por_regiao = agrupar_vendas(validas, "regiao_cliente")
+por_canal = agrupar_vendas(validas, "canal_venda")
 por_situacao = agrupar_vendas(vendas, "situacao_pedido")
 
 st.subheader("Produtos")
@@ -70,7 +75,7 @@ with colunas[2]:
 
 st.subheader("Evolução")
 escolha = st.radio("Agrupar por", ["Dia", "Hora"], horizontal=True)
-evolucao = agrupar_vendas_no_tempo(vendas, "D" if escolha == "Dia" else "h")
+evolucao = agrupar_vendas_no_tempo(validas, "D" if escolha == "Dia" else "h")
 mostrar_grafico(
     grafico_linhas(evolucao, "momento", "faturamento", f"Faturamento por {escolha.lower()}")
 )
