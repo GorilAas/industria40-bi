@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 import streamlit as st
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 from core.config import CACHE_SEGUNDOS, pegar_url_do_banco
 
@@ -20,8 +21,11 @@ TABELAS = [
 
 @st.cache_resource
 def pegar_conexao():
+    url = make_url(pegar_url_do_banco())
+    if url.drivername == "postgresql":
+        url = url.set(drivername="postgresql+psycopg2")
     return create_engine(
-        pegar_url_do_banco(),
+        url,
         pool_pre_ping=True,
         pool_recycle=300,
         pool_size=3,
