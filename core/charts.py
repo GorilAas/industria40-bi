@@ -26,6 +26,7 @@ ROTULOS = {
     "ciclo_medio_segundos": "Ciclo médio (s)",
     "parada_minutos": "Parada (min)",
     "faturamento": "Faturamento (R$)",
+    "custo_producao": "Custo estimado (R$)",
     "quantidade": "Unidades",
     "pedidos": "Pedidos",
     "aprovado": "Aprovado",

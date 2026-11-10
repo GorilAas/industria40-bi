@@ -26,6 +26,8 @@ Ligar o ambiente:
 source .venv/Scripts/activate
 ```
 
+No macOS ou Linux, use `source .venv/bin/activate`.
+
 Instalar o que o painel usa (demora um ou dois minutos):
 
 ```bash
@@ -55,15 +57,19 @@ Só estes dois comandos, dentro da pasta do projeto:
 source .venv/Scripts/activate
 ```
 
+No macOS ou Linux, use `source .venv/bin/activate`.
+
 ```bash
 streamlit run app.py
 ```
 
 ## O que aparece na tela
 
-No menu à esquerda ficam as páginas: Início, Visão geral, Produção, Vendas e Produção x vendas. Na barra lateral você filtra por período, máquina, produto e turno. Em branco, o filtro vale para tudo.
+No menu à esquerda ficam as páginas: Início, Visão geral, Produção, Vendas, Produção x vendas, Financeiro, Recomendações e Entrega. Na barra lateral você filtra por período, máquina, produto e turno. Em branco, o filtro vale para tudo. Se não houver registros recentes, selecione **Todo o histórico** no filtro de período.
 
 Na página Início, a tabela mostra se o seu usuário consegue ler cada tabela do banco. Se aparecer "Sem acesso" em todas, as demais páginas ficam vazias e mostram o aviso "Sem permissão para acessar os dados". Isso não é defeito do seu computador: o acesso de leitura ainda precisa ser liberado no banco.
+
+O [relatório de Financeiro e Recomendações](evidencias/Financeiro_e_Recomendacoes.md) reúne as premissas, os resultados e o roteiro de demonstração. A página **Entrega** mostra o relatório e permite baixar o relatório e as capturas em um ZIP.
 
 ## Quando algo dá errado
 
