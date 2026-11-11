@@ -155,6 +155,43 @@ def carregar_telemetria_agrupada(periodo: Periodo, intervalo: str = "hour") -> p
     )
 
 
+def carregar_alertas_telemetria(
+    periodo: Periodo,
+    temperatura_atencao: float,
+    temperatura_critico: float,
+    vibracao_atencao: float,
+    vibracao_critico: float,
+) -> pd.DataFrame:
+    parametros = {
+        "temp_atencao": temperatura_atencao,
+        "temp_critico": temperatura_critico,
+        "vib_atencao": vibracao_atencao,
+        "vib_critico": vibracao_critico,
+    }
+    filtro_periodo = montar_filtro_periodo("t.recorded_at", periodo, parametros)
+    return consultar(
+        f"""
+        SELECT m.machine_name AS nome_maquina,
+               COUNT(*) AS leituras,
+               COUNT(*) FILTER (
+                   WHERE t.temperature_c > :temp_atencao OR t.vibration_mm_s > :vib_atencao
+               ) AS leituras_alerta,
+               COUNT(*) FILTER (
+                   WHERE t.temperature_c > :temp_critico OR t.vibration_mm_s > :vib_critico
+               ) AS leituras_criticas,
+               AVG(t.temperature_c) AS temperatura_media,
+               MAX(t.temperature_c) AS temperatura_maxima,
+               AVG(t.vibration_mm_s) AS vibracao_media,
+               MAX(t.vibration_mm_s) AS vibracao_maxima
+        FROM machine_telemetry t
+        LEFT JOIN machines m ON m.machine_id = t.machine_id
+        WHERE TRUE {filtro_periodo}
+        GROUP BY m.machine_name
+    """,
+        parametros,
+    )
+
+
 def carregar_componentes() -> pd.DataFrame:
     return consultar("""
         SELECT c.component_id AS id_componente, m.machine_name AS nome_maquina,
