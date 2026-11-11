@@ -210,3 +210,67 @@ def excluir_cancelados(vendas: pd.DataFrame) -> pd.DataFrame:
     if vendas.empty:
         return vendas
     return vendas[vendas["situacao_pedido"] != SITUACAO_CANCELADA]
+
+
+def resumir_custos_producao(producao: pd.DataFrame, chave: str) -> pd.DataFrame:
+    colunas = [chave, "custo_producao", "custo_rejeitados", "custo_unitario_medio", "sem_custo"]
+    if producao.empty:
+        return pd.DataFrame(columns=colunas)
+
+    custo = pd.to_numeric(producao["custo_unitario"], errors="coerce")
+    custo = custo.where(custo.ge(0) & custo.lt(float("inf")))
+    tabela = producao.assign(
+        custo_producao=producao["qtd_produzida"] * custo,
+        custo_rejeitados=producao["qtd_rejeitada"] * custo,
+        unidades_com_custo=producao["qtd_produzida"].where(custo.notna()),
+        sem_custo=custo.isna() & producao["qtd_produzida"].gt(0),
+    )
+    grupos = tabela.groupby(chave, dropna=False)
+    custos = grupos[["custo_producao", "custo_rejeitados", "unidades_com_custo"]].sum(min_count=1)
+    custos["sem_custo"] = grupos["sem_custo"].sum()
+    unidades = custos["unidades_com_custo"]
+    custos["custo_unitario_medio"] = custos["custo_producao"] / unidades.where(unidades.gt(0))
+    return custos.reset_index()[colunas].sort_values("custo_producao", ascending=False)
+
+
+def resumir_margem_por_produto(
+    vendas: pd.DataFrame, producao: pd.DataFrame, custos_lotes: pd.DataFrame
+) -> pd.DataFrame:
+    if vendas.empty:
+        return pd.DataFrame()
+
+    pedidos = vendas.copy()
+    if custos_lotes.empty:
+        pedidos["custo_unitario_lote"] = float("nan")
+    else:
+        pedidos = pedidos.merge(
+            custos_lotes, on=["id_lote", "codigo_produto"], how="left", validate="many_to_one"
+        )
+
+    custos_produtos = resumir_custos_producao(producao, "codigo_produto")
+    custos_completos = custos_produtos[
+        custos_produtos["codigo_produto"].notna() & custos_produtos["sem_custo"].eq(0)
+    ].set_index("codigo_produto")["custo_unitario_medio"]
+    custo_lote = pedidos["custo_unitario_lote"]
+    custo_medio = pedidos["codigo_produto"].map(custos_completos)
+    quantidade = pedidos["qtd_vendida"]
+    custo_estimado = quantidade * custo_lote.fillna(custo_medio)
+    pedidos["custo_vendas"] = custo_estimado.mask(quantidade.eq(0), 0)
+    pedidos["unidades_por_media"] = quantidade.where(custo_lote.isna() & custo_medio.notna(), 0)
+    pedidos["sem_custo"] = pedidos["custo_vendas"].isna()
+    pedidos["sem_receita"] = pedidos["valor_total"].isna()
+
+    grupos = pedidos.groupby(["codigo_produto", "nome_produto"], dropna=False)
+    resultado = grupos.agg(
+        faturamento=("valor_total", "sum"),
+        custo_vendas=("custo_vendas", "sum"),
+        unidades_por_media=("unidades_por_media", "sum"),
+        pedidos_sem_custo=("sem_custo", "sum"),
+        pedidos_sem_receita=("sem_receita", "sum"),
+    ).reset_index()
+    custo_completo = resultado["pedidos_sem_custo"].eq(0)
+    resultado["custo_vendas"] = resultado["custo_vendas"].where(custo_completo)
+    receita = resultado["faturamento"].where(resultado["pedidos_sem_receita"].eq(0))
+    resultado["margem_estimada"] = receita - resultado["custo_vendas"]
+    resultado["margem_pct"] = resultado["margem_estimada"] / receita.where(receita.ne(0)) * 100
+    return resultado.sort_values("faturamento", ascending=False)

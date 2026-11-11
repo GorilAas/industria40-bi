@@ -225,3 +225,26 @@ def carregar_historico_desgaste(periodo: Periodo) -> pd.DataFrame:
     """,
         parametros,
     )
+
+
+def carregar_custos_dos_lotes_vendidos(periodo: Periodo) -> pd.DataFrame:
+    parametros: dict = {}
+    filtro_periodo = montar_filtro_periodo("v.created_at", periodo, parametros)
+    return consultar(
+        f"""
+        WITH lotes_vendidos AS (
+            SELECT DISTINCT v.batch_id, v.product_code
+            FROM sales_orders v
+            WHERE v.batch_id IS NOT NULL AND v.product_code IS NOT NULL {filtro_periodo}
+        )
+        SELECT p.batch_id AS id_lote, p.product_code AS codigo_produto,
+               SUM(p.qty_produced * p.unit_cost) / NULLIF(SUM(p.qty_produced), 0)
+                   AS custo_unitario_lote
+        FROM production_events p
+        JOIN lotes_vendidos v ON v.batch_id = p.batch_id AND v.product_code = p.product_code
+        WHERE p.qty_produced > 0
+        GROUP BY p.batch_id, p.product_code
+        HAVING COUNT(*) FILTER (WHERE p.unit_cost IS NULL OR p.unit_cost < 0) = 0
+        """,
+        parametros,
+    )
