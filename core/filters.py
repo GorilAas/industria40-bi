@@ -23,7 +23,7 @@ class Filtros:
     turnos: list[str] = field(default_factory=list)
 
 
-def criar_filtros_na_barra_lateral() -> Filtros:
+def criar_filtros_na_barra_lateral(*, incluir_filtros_producao: bool = True) -> Filtros:
     st.sidebar.header("Filtros globais")
 
     nome_periodo = st.sidebar.selectbox("Período", list(OPCOES_PERIODO), index=2)
@@ -33,12 +33,18 @@ def criar_filtros_na_barra_lateral() -> Filtros:
     else:
         periodo = Periodo(inicio=datetime.now(timezone.utc) - duracao)
 
-    maquinas = carregar_maquinas()
-    nomes_maquinas = [] if maquinas.empty else maquinas["nome_maquina"].dropna().tolist()
+    maquinas_escolhidas = []
+    if incluir_filtros_producao:
+        maquinas = carregar_maquinas()
+        nomes = [] if maquinas.empty else maquinas["nome_maquina"].dropna().tolist()
+        maquinas_escolhidas = st.sidebar.multiselect("Máquinas", options=nomes)
 
-    maquinas_escolhidas = st.sidebar.multiselect("Máquinas", options=nomes_maquinas)
     produtos_escolhidos = st.sidebar.multiselect("Produtos", options=listar_produtos())
-    turnos_escolhidos = st.sidebar.multiselect("Turnos", options=listar_turnos())
+    turnos_escolhidos = (
+        st.sidebar.multiselect("Turnos", options=listar_turnos())
+        if incluir_filtros_producao
+        else []
+    )
     st.sidebar.caption("Sem seleção = todos.")
 
     return Filtros(

@@ -53,11 +53,16 @@ if not com_rejeicao.empty:
 com_parada = por_maquina[por_maquina["parada_minutos"] > 0]
 if not com_parada.empty:
     maquina = com_parada.loc[com_parada["parada_minutos"].idxmax()]
+    produtividade = maquina["unidades_por_hora"]
+    detalhe = (
+        f" e {formatar_numero(produtividade, 1)} unidades por hora"
+        if pd.notna(produtividade)
+        else ""
+    )
     recomendacoes.append(
         (
             f"Revisar as paradas de {maquina['nome_maquina']}",
-            f"{formatar_numero(maquina['parada_minutos'], 1)} minutos de parada e "
-            f"{formatar_numero(maquina['unidades_por_hora'], 1)} unidades por hora.",
+            f"{formatar_numero(maquina['parada_minutos'], 1)} minutos de parada{detalhe}.",
             "Levantar as causas das paradas e verificar a capacidade das outras máquinas "
             "antes de redistribuir ordens de produção.",
             "Produção · produtividade por máquina",

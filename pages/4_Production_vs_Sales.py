@@ -21,17 +21,17 @@ from core.ui import (
 )
 
 configurar_pagina("Produção versus vendas")
-filtros = criar_filtros_na_barra_lateral()
-st.sidebar.caption("Máquina e turno filtram só a produção. Vendas usam período e produto.")
+filtros = criar_filtros_na_barra_lateral(incluir_filtros_producao=False)
+st.sidebar.caption("Período e produto se aplicam tanto à produção quanto às vendas.")
 producao = aplicar_filtros(carregar_producao(filtros.periodo), filtros)
 vendas = excluir_cancelados(aplicar_filtros(carregar_vendas(filtros.periodo), filtros))
 
 if producao.empty and vendas.empty:
-    mostrar_sem_dados()
+    mostrar_sem_dados("Sem produção ou vendas no recorte. Tente ampliar o período.")
     st.stop()
 
 st.info(
-    "A diferença entre produzido e vendido não é o estoque físico. "
+    "**A diferença entre aprovado e vendido não representa o estoque físico.** "
     "O banco não registra movimentação de estoque, então a conta ignora devoluções, "
     "perdas e produção anterior ao período. Pedidos cancelados não entram em vendido."
 )
@@ -40,57 +40,99 @@ por_produto = comparar_producao_vendas(producao, vendas)
 produzido = por_produto["produzido"].sum()
 aprovado = por_produto["aprovado"].sum()
 vendido = por_produto["vendido"].sum()
-diferenca_pct = (aprovado - vendido) / aprovado * 100 if aprovado else 0.0
+diferenca = aprovado - vendido
+if aprovado > 0 and not vendas.empty:
+    diferenca_pct = abs(diferenca) / aprovado * 100
+    significativa = "Sim" if diferenca_pct > LIMITE_DIFERENCA_PCT else "Não"
+    resposta_diferenca = (
+        f"{significativa}. A diferença é de {formatar_numero(abs(diferenca))} un "
+        f"({formatar_numero(diferenca_pct, 1)}% do aprovado)."
+    )
+else:
+    resposta_diferenca = (
+        "Sem base para comparar: é preciso ter unidades aprovadas e vendas válidas."
+    )
+
+acima_das_vendas = por_produto[por_produto["diferenca"] > 0]
+com_demanda = por_produto[por_produto["vendido"] > 0]
 
 mostrar_indicadores(
     [
         ("Produzido", formatar_numero(produzido)),
         ("Aprovado", formatar_numero(aprovado), "Produzido menos rejeitado."),
         ("Vendido", formatar_numero(vendido)),
-        ("Aprovado menos vendido", formatar_numero(aprovado - vendido)),
+        ("Aprovado menos vendido", formatar_numero(diferenca)),
     ]
 )
 
 st.subheader("Por produto")
 mostrar_grafico(
     grafico_barras_agrupadas(
-        por_produto, "nome_produto", ["aprovado", "vendido"], "Aprovado e vendido"
+        por_produto,
+        "nome_produto",
+        ["produzido", "aprovado", "vendido"],
+        "Produzido, aprovado e vendido",
     )
 )
-st.dataframe(por_produto, hide_index=True, use_container_width=True)
+colunas_quantidade = {
+    "produzido": "Produzido",
+    "aprovado": "Aprovado",
+    "vendido": "Vendido",
+    "diferenca": "Aprovado menos vendido",
+    "vendido_pct_aprovado": st.column_config.NumberColumn("Vendido / aprovado (%)", format="%.1f"),
+}
+st.dataframe(
+    por_produto, hide_index=True, column_config={"nome_produto": "Produto", **colunas_quantidade}
+)
 
 st.subheader("Ao longo do tempo")
 escolha = st.radio("Agrupar por", ["Dia", "Hora"], horizontal=True)
 no_tempo = comparar_producao_vendas_no_tempo(producao, vendas, "D" if escolha == "Dia" else "h")
 mostrar_grafico(
     grafico_linhas_varias(
-        no_tempo, "momento", ["aprovado", "vendido"], f"Aprovado e vendido por {escolha.lower()}"
+        no_tempo,
+        "momento",
+        ["produzido", "aprovado", "vendido"],
+        f"Produzido, aprovado e vendido por {escolha.lower()}",
     )
 )
+
+st.dataframe(
+    no_tempo,
+    hide_index=True,
+    column_config={
+        "momento": st.column_config.DatetimeColumn("Período", format="DD/MM/YYYY HH:mm"),
+        **colunas_quantidade,
+    },
+)
+st.caption("A produção usa a data de início do evento e as vendas usam a data do pedido.")
 
 st.subheader("Respostas para a gestão")
 mostrar_respostas(
     [
         (
-            "Produto com maior produção e menor venda",
-            descrever_extremo(
-                pegar_extremo(por_produto, "nome_produto", "diferenca"),
-                lambda v: f"{formatar_numero(v)} un a mais produzidas",
+            "Produto com maior diferença entre aprovados e vendidos",
+            "Nenhum produto teve mais unidades aprovadas do que vendidas."
+            if acima_das_vendas.empty
+            else descrever_extremo(
+                pegar_extremo(acima_das_vendas, "nome_produto", "diferenca"),
+                lambda v: f"{formatar_numero(v)} un aprovadas acima das vendidas",
             ),
         ),
         (
             "Produto com maior demanda",
             descrever_extremo(
-                pegar_extremo(por_produto, "nome_produto", "vendido"),
+                pegar_extremo(com_demanda, "nome_produto", "vendido"),
                 lambda v: f"{formatar_numero(v)} un vendidas",
             ),
         ),
         (
             "Existe diferença significativa entre produção e vendas?",
-            f"{'Sim' if abs(diferenca_pct) > LIMITE_DIFERENCA_PCT else 'Não'}: "
-            f"aprovado {formatar_numero(aprovado)}, vendido {formatar_numero(vendido)} "
-            f"({formatar_numero(diferenca_pct, 1)}% do aprovado)",
+            resposta_diferenca,
         ),
     ]
 )
-st.caption(f"Premissa: diferença acima de {LIMITE_DIFERENCA_PCT:.0f}% do aprovado é significativa.")
+st.caption(
+    f"O painel usa {LIMITE_DIFERENCA_PCT:.0f}% das unidades aprovadas como limite gerencial "
+    "para classificar a diferença absoluta entre aprovados e vendidos."
+)
