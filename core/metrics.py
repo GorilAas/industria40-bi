@@ -86,22 +86,28 @@ def agrupar_producao(producao: pd.DataFrame, coluna: str) -> pd.DataFrame:
     if producao.empty:
         return pd.DataFrame(columns=[coluna, *COLUNAS_PRODUCAO_AGRUPADA])
 
+    duracao_valida = producao["duracao_horas"].gt(0)
+    por_evento = producao.assign(
+        horas_validas=producao["duracao_horas"].where(duracao_valida),
+        unidades_cronometradas=producao["qtd_produzida"].where(duracao_valida),
+    )
     agrupado = (
-        producao.groupby(coluna)
+        por_evento.groupby(coluna)
         .agg(
             produzido=("qtd_produzida", "sum"),
             rejeitado=("qtd_rejeitada", "sum"),
             parada_minutos=("minutos_parada", "sum"),
             ciclo_medio_segundos=("tempo_ciclo_segundos", "mean"),
-            horas=("duracao_horas", "sum"),
+            horas=("horas_validas", "sum"),
+            unidades_cronometradas=("unidades_cronometradas", "sum"),
         )
         .reset_index()
     )
     produzido_sem_zero = agrupado["produzido"].where(agrupado["produzido"] != 0)
     horas_sem_zero = agrupado["horas"].where(agrupado["horas"] != 0)
     agrupado["taxa_rejeicao"] = (agrupado["rejeitado"] / produzido_sem_zero * 100).fillna(0.0)
-    agrupado["unidades_por_hora"] = (agrupado["produzido"] / horas_sem_zero).fillna(0.0)
-    return agrupado.drop(columns="horas").sort_values(
+    agrupado["unidades_por_hora"] = agrupado["unidades_cronometradas"] / horas_sem_zero
+    return agrupado.drop(columns=["horas", "unidades_cronometradas"]).sort_values(
         "produzido", ascending=False, ignore_index=True
     )
 
@@ -132,11 +138,13 @@ def arredondar_momento(datas: pd.Series, frequencia: str) -> pd.Series:
 
 def agrupar_vendas_no_tempo(vendas: pd.DataFrame, frequencia: str = "D") -> pd.DataFrame:
     if vendas.empty:
-        return pd.DataFrame(columns=["momento", "pedidos", "faturamento"])
+        return pd.DataFrame(columns=["momento", "pedidos", "faturamento", "quantidade"])
 
     por_momento = vendas.assign(momento=arredondar_momento(vendas["criado_em"], frequencia))
     resultado = por_momento.groupby("momento").agg(
-        pedidos=("id_pedido", "count"), faturamento=("valor_total", "sum")
+        pedidos=("id_pedido", "count"),
+        faturamento=("valor_total", "sum"),
+        quantidade=("qtd_vendida", "sum"),
     )
     return resultado.reset_index()
 
@@ -156,7 +164,7 @@ def _somar_por(tabela: pd.DataFrame, chave: str, valor: str, nome: str) -> pd.Se
 def _calcular_diferenca(comparacao: pd.DataFrame) -> pd.DataFrame:
     comparacao["diferenca"] = comparacao["aprovado"] - comparacao["vendido"]
     aprovado_sem_zero = comparacao["aprovado"].where(comparacao["aprovado"] != 0)
-    comparacao["vendido_pct_aprovado"] = (comparacao["vendido"] / aprovado_sem_zero * 100).fillna(0)
+    comparacao["vendido_pct_aprovado"] = comparacao["vendido"] / aprovado_sem_zero * 100
     return comparacao
 
 
@@ -181,6 +189,7 @@ def comparar_producao_vendas(
 def comparar_producao_vendas_no_tempo(
     producao: pd.DataFrame, vendas: pd.DataFrame, frequencia: str = "D"
 ) -> pd.DataFrame:
+    produzido = pd.Series(dtype=float, name="produzido")
     aprovado = pd.Series(dtype=float, name="aprovado")
     vendido = pd.Series(dtype=float, name="vendido")
     if not producao.empty:
@@ -188,18 +197,23 @@ def comparar_producao_vendas_no_tempo(
             momento=arredondar_momento(producao["inicio"], frequencia),
             aprovado=producao["qtd_produzida"] - producao["qtd_rejeitada"],
         )
-        aprovado = producao.groupby("momento")["aprovado"].sum()
+        grupos = producao.groupby("momento")
+        produzido = grupos["qtd_produzida"].sum().rename("produzido")
+        aprovado = grupos["aprovado"].sum()
     if not vendas.empty:
         vendas = vendas.assign(momento=arredondar_momento(vendas["criado_em"], frequencia))
         vendido = vendas.groupby("momento")["qtd_vendida"].sum().rename("vendido")
 
-    comparacao = pd.concat([aprovado, vendido], axis=1).fillna(0)
+    comparacao = pd.concat([produzido, aprovado, vendido], axis=1).fillna(0).sort_index()
     comparacao.index.name = "momento"
     comparacao = _calcular_diferenca(comparacao)
-    return comparacao.reset_index().sort_index()
+    return comparacao.reset_index()
 
 
 def pegar_extremo(tabela: pd.DataFrame, coluna_nome: str, coluna_valor: str, maior: bool = True):
+    if tabela.empty:
+        return None
+    tabela = tabela.dropna(subset=[coluna_nome, coluna_valor])
     if tabela.empty:
         return None
     linha = tabela.loc[tabela[coluna_valor].idxmax() if maior else tabela[coluna_valor].idxmin()]
